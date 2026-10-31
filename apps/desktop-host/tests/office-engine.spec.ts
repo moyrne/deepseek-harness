@@ -3,7 +3,7 @@ import { createRequire, type ModuleHooks } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, sep } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import { installOfficeEngineResolution } from '../src/office-engine.ts'
+import { installLinuxEngineProbeCompatibility, installOfficeEngineResolution } from '../src/office-engine.ts'
 import { PackageManifests } from '../../../packages/boot/hmr/src/package-manifest.ts'
 
 const roots: string[] = []
@@ -136,4 +136,48 @@ it('leaves external engines and the archived WASM engine at their own locations'
     .toMatchObject({ path: realpathSync(dirname(external)) })
   expect(f.require('@deepseek-ai/libreoffice-kit-wasm/package.json'))
     .toMatchObject({ path: realpathSync(dirname(wasm)) })
+})
+
+interface ProbeReport {
+  readonly header?: { glibcVersionRuntime?: string } & Record<string, unknown>
+}
+
+function glibcMarker(): string | undefined {
+  return (process.report.getReport() as ProbeReport).header?.glibcVersionRuntime
+}
+
+it('hides the glibc marker so the kit probe selects WASM when no Linux engine is installed', () => {
+  const root = mkdtempSync(join(tmpdir(), 'desktop-engine-probe-'))
+  roots.push(root)
+  const original = process.report.getReport
+  try {
+    installLinuxEngineProbeCompatibility(join(root, 'dsh'))
+    if (process.platform === 'linux' && (original() as ProbeReport).header?.glibcVersionRuntime !== undefined) {
+      expect(glibcMarker()).toBeUndefined()
+      expect((original() as ProbeReport).header?.glibcVersionRuntime).not.toBeUndefined()
+      installLinuxEngineProbeCompatibility(join(root, 'dsh'))
+      expect(glibcMarker()).toBeUndefined()
+    } else {
+      expect(glibcMarker()).toBe((original() as ProbeReport).header?.glibcVersionRuntime)
+    }
+  } finally {
+    process.report.getReport = original
+  }
+})
+
+it('keeps the glibc marker when the runtime carries a native Linux engine', () => {
+  const root = mkdtempSync(join(tmpdir(), 'desktop-engine-probe-native-'))
+  roots.push(root)
+  const runtime = join(root, 'dsh')
+  if (process.platform !== 'linux' || glibcMarker() === undefined) return
+  const manifest = join(runtime, 'node_modules', '@deepseek-ai', `libreoffice-kit-linux-${process.arch}-glibc`, 'package.json')
+  mkdirSync(dirname(manifest), { recursive: true })
+  writeFileSync(manifest, '{}')
+  const original = process.report.getReport
+  try {
+    installLinuxEngineProbeCompatibility(runtime)
+    expect(glibcMarker()).not.toBeUndefined()
+  } finally {
+    process.report.getReport = original
+  }
 })

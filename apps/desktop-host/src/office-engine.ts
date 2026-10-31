@@ -1,6 +1,6 @@
 /** Resolve packaged Office engine manifests from their complete, unpacked resource directories. */
 import { registerHooks, type ModuleHooks } from 'node:module'
-import { realpathSync } from 'node:fs'
+import { existsSync, realpathSync } from 'node:fs'
 import { basename, dirname, join, relative } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -12,6 +12,47 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 export function runtimeArchivePath(runtimeDir: string): string | undefined {
   const parent = dirname(runtimeDir)
   return basename(parent) === 'app.asar' ? parent : undefined
+}
+
+/** Marker set on the wrapped report reader so repeated installs in one process stay idempotent. */
+const LINUX_PROBE_COMPATIBILITY = Symbol.for('@deepseek-ai/dsh-desktop-host/linux-engine-probe-compatibility')
+
+/** Diagnostic report shape the engine probe reads; the full report stays opaque here. */
+interface EngineProbeReport {
+  readonly header?: { glibcVersionRuntime?: string } & Record<string, unknown>
+}
+
+/**
+ * Keep LibreOffice Kit's engine probe on WASM for Linux runtimes without a native engine.
+ * The kit selects a native engine from `process.report.getReport().header.glibcVersionRuntime` and
+ * then treats an installed-package probe miss inside an ASAR archive as "engine present", because
+ * Electron's ASAR `lstatSync` reports a missing entry as null and the probe checks `!== undefined`.
+ * No Linux engine package is published, so the probe can never succeed; hiding the glibc marker
+ * sends the kit to its WASM fallback. A runtime that actually carries a native engine keeps it.
+ * @param runtimeDir - Prepared or ASAR-contained dsh runtime directory.
+ */
+export function installLinuxEngineProbeCompatibility(runtimeDir: string): void {
+  if (process.platform !== 'linux') return
+  const getReport = process.report.getReport as ReturnType<typeof process.report.getReport> & {
+    [LINUX_PROBE_COMPATIBILITY]?: boolean
+  }
+  if (getReport[LINUX_PROBE_COMPATIBILITY] === true) return
+  const details = process.report.getReport() as EngineProbeReport
+  const target = details.header?.glibcVersionRuntime === undefined ? undefined
+    : `libreoffice-kit-linux-${process.arch}-glibc`
+  if (target === undefined) return
+  const manifest = join(runtimeDir, 'node_modules', '@deepseek-ai', target, 'package.json')
+  if (existsSync(manifest)) return
+  const original = process.report.getReport.bind(process.report)
+  const wrapped = (() => {
+    const report = original() as EngineProbeReport
+    if (report.header !== undefined) {
+      delete report.header.glibcVersionRuntime
+    }
+    return report
+  }) as typeof process.report.getReport & { [LINUX_PROBE_COMPATIBILITY]?: boolean }
+  wrapped[LINUX_PROBE_COMPATIBILITY] = true
+  process.report.getReport = wrapped
 }
 
 /**
