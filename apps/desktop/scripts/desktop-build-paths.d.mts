@@ -46,9 +46,16 @@ export function desktopTargetBuildPaths(target: DesktopAutoUpdateTarget, environ
  * @returns Platform and architecture of the prepared payload.
  */
 export function desktopTargetPlatform(target: DesktopAutoUpdateTarget): {
-  readonly platform: 'darwin' | 'win32'
+  readonly platform: 'darwin' | 'win32' | 'linux'
   readonly arch: 'arm64' | 'x64'
 }
+
+/**
+ * Return the Electron executable path inside one extracted target distribution.
+ * @param target - Distribution platform.
+ * @returns Executable path relative to the extracted distribution root.
+ */
+export function desktopElectronExecutable(target: { platform: 'darwin' | 'win32' | 'linux' }): string
 
 /**
  * Resolve the paths owned by the target selected in a packaging environment.

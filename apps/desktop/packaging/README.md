@@ -97,7 +97,53 @@ pnpm run package:desktop:mac:x64
 pnpm run package:desktop:win:x64
 ```
 
-The macOS arm64 command requires Apple Silicon. The macOS x64 command runs on Intel macOS or Apple Silicon with Rosetta. The Windows x64 command requires Windows x64. Linux is not a supported Desktop release target.
+The macOS arm64 command requires Apple Silicon. The macOS x64 command runs on Intel macOS or Apple Silicon with Rosetta. The Windows x64 command requires Windows x64.
+
+Linux x64 is supported as an unsigned local AppImage target only; release presets, signing, and update publication are not configured for Linux:
+
+```sh
+pnpm run package:desktop:linux:x64:unsigned
+```
+
+The Linux x64 command requires a Linux build host and produces an AppImage under `.desktop-build/targets/linux-x64/unsigned-artifacts/`.
+
+<a id="linux-appimage-usage"></a>
+
+### Running the Linux AppImage
+
+The AppImage carries the complete runtime (Electron, Node.js, Python, pnpm, and the dsh dependency tree); the host only needs FUSE to mount the image. On Debian 12 install the FUSE library first:
+
+```sh
+sudo apt install libfuse2
+```
+
+Make the downloaded AppImage executable and run it; no root access or installation step is required, and the application stores its data under `~/.dsh` like every other Desktop build:
+
+```sh
+chmod +x deepseek-harness-<version>-linux-x64-unsigned.AppImage
+./deepseek-harness-<version>-linux-x64-unsigned.AppImage
+```
+
+<a id="linux-desktop-integration"></a>
+
+### Desktop integration on Linux
+
+The AppImage does not modify the desktop on its own. The recommended integration is [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher), which registers the embedded desktop entry, the application icon, and the `dsh://` URL handler with the desktop environment when the AppImage is first launched or moved into its managed directory. Without it, create a launcher by hand:
+
+```ini
+# ~/.local/share/applications/deepseek-harness.desktop
+[Desktop Entry]
+Type=Application
+Name=DeepSeek Harness
+Exec=/absolute/path/to/deepseek-harness-<version>-linux-x64-unsigned.AppImage
+Icon=/absolute/path/to/deepseek-harness-<version>-linux-x64-unsigned.AppImage
+Terminal=false
+Categories=Development;
+MimeType=x-scheme-handler/dsh;
+StartupWMClass=deepseek-harness
+```
+
+Then refresh the menu database with `update-desktop-database ~/.local/share/applications/`. Point `Icon=` at an extracted copy of the icon if the desktop environment cannot read an icon from inside the AppImage. To remove the integration, delete the `.desktop` file and the AppImage; user data under `~/.dsh` is preserved unless removed explicitly.
 
 Both release and local unsigned macOS DMGs use LZMA compression (`dmg.format: 'ULMO'`) in [the electron-builder configuration](../scripts/electron-builder-config.mjs). A [build-time patch](../../../patches/app-builder-lib@26.17.0.patch) adds this format to the pinned builder's validation and TypeScript declarations.
 
