@@ -35,7 +35,10 @@ export function desktopReleasesRoot(env: NodeJS.ProcessEnv): string {
 export async function retainDesktopCi(env: NodeJS.ProcessEnv, appRoot = resolve(import.meta.dirname, '..')): Promise<string> {
   const target = resolveDesktopBuildTarget(env)
   const windows = target === 'win-x64'
-  const platform = windows ? 'win32' : 'darwin'
+  const linux = target === 'linux-x64'
+  // Linux packages are unsigned local artifacts; no CI workflow retains or publishes them yet.
+  if (linux) throw new Error('desktop retention: Linux packages are not retained for publication')
+  const platform: 'win32' | 'darwin' = windows ? 'win32' : 'darwin'
   const settings = loadDesktopPackageEnvironment(platform, env, appRoot, { unsigned: true })
   const preset = settings.DSH_PACKAGING_PRESET
   if (preset !== 'test' && preset !== 'production') throw new Error('desktop retention: a machine preset is required')

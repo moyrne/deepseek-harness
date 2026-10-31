@@ -21,8 +21,14 @@
   en: 3f38ab26ee195b39
   zh: f00eddafa8f3b9ca
 /desktop-packaging/configuration-and-local-builds:
-  en: 5b4f0f80a117f202
-  zh: ff05be196c181087
+  en: 8b895e4ab777ec3c
+  zh: 24df3461ece1902a
+/desktop-packaging/configuration-and-local-builds/running-the-linux-appimage:
+  en: 31c246248978dce5
+  zh: e9052512b2dc8191
+/desktop-packaging/configuration-and-local-builds/desktop-integration-on-linux:
+  en: b160b78a1efc1b63
+  zh: d3b8b9753713e3ca
 /desktop-packaging/windows-actions-packaging:
   en: 253e17998951931c
   zh: b582b377391d2ec2

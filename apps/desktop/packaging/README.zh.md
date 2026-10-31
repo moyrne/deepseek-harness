@@ -97,7 +97,53 @@ pnpm run package:desktop:mac:x64
 pnpm run package:desktop:win:x64
 ```
 
-macOS arm64 命令要求 Apple Silicon。macOS x64 命令可以在 Intel macOS 或带 Rosetta 的 Apple Silicon 上运行。Windows x64 命令要求 Windows x64。Linux 不是受支持的 Desktop 发布目标。
+macOS arm64 命令要求 Apple Silicon。macOS x64 命令可以在 Intel macOS 或带 Rosetta 的 Apple Silicon 上运行。Windows x64 命令要求 Windows x64。
+
+Linux x64 目前仅支持未签名的本地 AppImage 目标；发布 preset、签名和更新发布尚未配置 Linux：
+
+```sh
+pnpm run package:desktop:linux:x64:unsigned
+```
+
+Linux x64 命令要求 Linux 构建主机，产物为 AppImage，位于 `.desktop-build/targets/linux-x64/unsigned-artifacts/`。
+
+<a id="linux-appimage-usage"></a>
+
+### 运行 Linux AppImage
+
+AppImage 自带完整运行时（Electron、Node.js、Python、pnpm 及 dsh 依赖树），宿主机只需 FUSE 来挂载镜像。Debian 12 先安装 FUSE 库：
+
+```sh
+sudo apt install libfuse2
+```
+
+为下载的 AppImage 添加执行权限后运行即可；不需要 root 权限或安装步骤，应用数据与其他 Desktop 构建一样写入 `~/.dsh`：
+
+```sh
+chmod +x deepseek-harness-<version>-linux-x64-unsigned.AppImage
+./deepseek-harness-<version>-linux-x64-unsigned.AppImage
+```
+
+<a id="linux-desktop-integration"></a>
+
+### Linux 桌面集成
+
+AppImage 本身不修改桌面。推荐使用 [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher)：首次启动或移入其管理目录时，它会登记包内的 desktop 入口、应用图标和 `dsh://` URL 处理器。不用它时，可以手工创建启动项：
+
+```ini
+# ~/.local/share/applications/deepseek-harness.desktop
+[Desktop Entry]
+Type=Application
+Name=DeepSeek Harness
+Exec=/absolute/path/to/deepseek-harness-<version>-linux-x64-unsigned.AppImage
+Icon=/absolute/path/to/deepseek-harness-<version>-linux-x64-unsigned.AppImage
+Terminal=false
+Categories=Development;
+MimeType=x-scheme-handler/dsh;
+StartupWMClass=deepseek-harness
+```
+
+随后运行 `update-desktop-database ~/.local/share/applications/` 刷新菜单数据库。如果桌面环境无法从 AppImage 内读取图标，将 `Icon=` 指向一份解包出来的图标文件。移除集成时删除该 `.desktop` 文件和 AppImage 即可；`~/.dsh` 下的用户数据默认保留，除非显式删除。
 
 macOS 正式发布和本地未签名 DMG 都通过 [electron-builder 配置](../scripts/electron-builder-config.mjs)中的 `dmg.format: 'ULMO'` 使用 LZMA 压缩。[构建时补丁](../../../patches/app-builder-lib@26.17.0.patch)为固定版本 builder 的校验规则和 TypeScript 声明添加此格式。
 

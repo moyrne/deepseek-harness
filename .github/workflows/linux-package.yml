@@ -1,0 +1,86 @@
+name: Package Desktop · Linux · x64
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: '打包源码：仓库内分支或 tag'
+        type: string
+        default: master
+        required: true
+      build_version:
+        description: '构建版本：留空使用产品版本；auto 使用当日本地序号；或填写完整版本号'
+        type: string
+        default: ''
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-linux-package
+  cancel-in-progress: false
+
+env:
+  PRIMARY_NODE_VERSION: '24.9.0'
+
+jobs:
+  package:
+    name: package
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_ref }}
+          # 打包从选定的源码提交构建； Actions 检出默认不携带标签。
+          fetch-depth: 1
+
+      - uses: pnpm/action-setup@v5.0.0
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - name: Configure pnpm store path
+        id: pnpm-store
+        run: |
+          store_root="$HOME/.local/share/pnpm/store"
+          echo "PNPM_CONFIG_STORE_DIR=$store_root" >> "$GITHUB_ENV"
+          mkdir -p "$store_root"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Package unsigned Linux AppImage
+        run: |
+          if [ -n "${{ inputs.build_version }}" ]; then
+            pnpm run package:desktop:linux:x64:unsigned -- --build-version "${{ inputs.build_version }}"
+          else
+            pnpm run package:desktop:linux:x64:unsigned
+          fi
+
+      - name: Locate artifacts
+        id: artifacts
+        run: |
+          artifacts_dir="$GITHUB_WORKSPACE/apps/desktop/.desktop-build/targets/linux-x64/unsigned-artifacts"
+          echo "appimage=$(ls "$artifacts_dir"/*.AppImage)" >> "$GITHUB_OUTPUT"
+          echo "directory=$artifacts_dir" >> "$GITHUB_OUTPUT"
+
+      - name: Retain unsigned AppImage
+        uses: actions/upload-artifact@v5
+        with:
+          name: linux-x64-unsigned-appimage
+          path: ${{ steps.artifacts.outputs.appimage }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Retain packaging diagnostics
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: linux-package-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: apps/desktop/.desktop-build/packaging-runs/
+          if-no-files-found: ignore
+          retention-days: 14
