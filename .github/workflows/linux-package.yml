@@ -1,6 +1,9 @@
 name: Package Desktop · Linux · x64
 
 on:
+  push:
+    tags:
+      - 'dsh-desktop-linux-*'
   workflow_dispatch:
     inputs:
       source_ref:
@@ -31,8 +34,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.source_ref }}
-          # 打包从选定的源码提交构建； Actions 检出默认不携带标签。
+          # Manual runs build the selected ref; tag pushes build the pushed tag.
+          ref: ${{ inputs.source_ref || github.ref_name }}
           fetch-depth: 1
 
       - uses: pnpm/action-setup@v5.0.0
