@@ -1547,6 +1547,36 @@ describe('desktop main startup', () => {
     await harness.quitCompleted.promise
   })
 
+  it('treats a Linux window close like Quit: confirm before stopping, cancel keeps the workspace', async () => {
+    vi.stubGlobal('process', { ...process, platform: 'linux', arch: 'x64', resourcesPath: 'desktop-test-resources' })
+    const host = await readyWorkspace()
+    const window = harness.windows[0]!
+    host.inspectQuit.mockResolvedValue({ activeTasks: true, scheduledTasks: false })
+    const cancel = Promise.withResolvers<Electron.MessageBoxReturnValue>()
+    const approve = Promise.withResolvers<Electron.MessageBoxReturnValue>()
+    harness.dialog.showMessageBox.mockReset().mockReturnValueOnce(cancel.promise).mockReturnValueOnce(approve.promise)
+    window.close()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(harness.dialog.showMessageBox).toHaveBeenCalledTimes(1)
+    expect(window.hide).not.toHaveBeenCalled()
+    expect(host.stop).not.toHaveBeenCalled()
+    cancel.resolve({ response: 1, checkboxChecked: false })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(host.stop).not.toHaveBeenCalled()
+    expect(harness.app.quit).not.toHaveBeenCalled()
+    // Closing again asks again; approval quits through the normal teardown path.
+    window.close()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(harness.dialog.showMessageBox).toHaveBeenCalledTimes(2)
+    approve.resolve({ response: 0, checkboxChecked: false })
+    await vi.advanceTimersByTimeAsync(0)
+    await host.stopping.promise
+    expect(host.stop).toHaveBeenCalledOnce()
+    host.exited.resolve()
+    await harness.quitCompleted.promise
+    expect(window.hide).toHaveBeenCalledOnce()
+  })
+
   it('defers the downloaded-update confirmation until the hidden window is shown again', async () => {
     await readyWorkspace()
     const window = harness.windows[0]!
